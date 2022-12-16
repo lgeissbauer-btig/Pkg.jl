@@ -351,6 +351,55 @@ An extension will only be loaded if the extension dependencies are loaded from t
     know about them, the extensions will not load. This is because the manifest lacks some information that tells Julia
     when it should load these packages. So make sure you use a manifest generated at least the Julia version you are using.
 
+### Exports and new functionality
+
+In some cases, you may wish to create wholly new functionality that is otherwise lacking in either package.
+Let's imagine there are two packages, `Socks` and `Wardobes`, and you want to create a function `list_footwear` that
+describes all the footwear in your wardrobe. However, until some footwear-specific package like `Socks` gets loaded,
+there is nothing to describe.
+
+One way to handle this is to define (and possibly export) `list_footwear` in `Wardrobes`, but have it
+initially be a function with no methods. We might also want to provide a convenient hint in case users
+try to call `list_footwear` without loading any footware-specific package. We can achieve that with the following:
+
+In `src/Wardrobes.jl`:
+```
+
+# Even though this is an "empty" function (no methods yet),
+# we can create a docstring.
+"""
+    list_footware(wardrobe) -> footwear
+
+Return all the footwear in `wardrobe`.
+
+!!! note
+    You must load one or more footware-specifc packages (e.g., `Socks.jl`).
+"""
+function list_footware end      # no methods (yet)
+
+function __init__()
+    # Warn users if they forget to load packages needed for extra functionality
+    Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+        if exc.f == list_footware
+            printstyled(io, "\n`list_footware` requires that you manually load a footware-specific package", color=:yellow)
+        end
+    end
+end
+```
+
+Now if a user tries to call `list_footware(wardrobe)` without the required functionality, she will obtain
+
+```
+julia> ftw = list_footware(wardrobe);
+ERROR: MethodError: no method matching list_footware(::Wardrobe)
+`list_footware` requires that you manually load a footware-specific package
+Stacktrace:
+ [1] top-level scope
+   @ REPL[3]:1
+```
+
+with a nicely-visible (due to the yellow coloring) warning about the missing step.
+
 ### Backwards compatibility
 
 This section discusses various methods for using extensions on Julia versions that support them,
